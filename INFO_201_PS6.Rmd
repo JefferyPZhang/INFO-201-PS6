@@ -1,0 +1,185 @@
+---
+title: "INFO_201_PS6"
+author: "Jeffery Zhang"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## ---------- PS6: Merging and Reshaping Data ----------
+
+```{r}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(viridis)
+```
+
+## ---------- 1: How is CO2 related to global temperature? ----------
+
+## ---------- 1.1: Scripps CO2 Data ----------
+
+## 1.1.1
+```{r}
+scripps_data <- read_delim("C:/Users/xuz-t/OneDrive/Documents/INFO_201_Scripts/PS6/data/scripps-co2.csv")
+scripps_data <- scripps_data[, c("year", "month", "co2")]
+head(scripps_data)
+```
+
+## 1.1.2
+
+A line in this dataframe represents the parts-per-million concentration of CO2 at the Mauna Loa Observatory, averaged across a given month.
+
+## 1.1.3
+
+A missing value is given by the value -99.99.
+
+## 1.1.4
+
+This data represents the period from 1958 to 2023.
+
+## 1.1.5
+
+```{r}
+filtered_scripps <- scripps_data %>%
+  filter(co2 >= 0) %>%
+  mutate(date = as.Date(paste(year, month, "01", sep = "-"), format = "%Y-%m-%d"))
+ggplot(filtered_scripps, aes(x = date, y = co2)) +
+  geom_line() +
+  geom_point(size = 1) +
+  labs(title = "Mauna Loa Observatory, Hawaii | Monthly Average Carbon Dioxide Concentration",
+       x = "Year",
+       y = "CO2 Concentration (in ppm)") +
+  theme_minimal()
+```
+
+## 1.1.6
+
+It has both been increasing, as well as slightly accelerating through the last 60 years.
+
+### ---------- 1.2: HadCRUT Temperature Data ----------
+
+## 1.2.1
+```{r}
+hadCRUT_data <- read_delim("C:/Users/xuz-t/OneDrive/Documents/INFO_201_Scripts/PS6/data/hadcrut-5.0.1.0-annual.csv")
+hadCRUT_data <- hadCRUT_data[, c("Time", "Anomaly (deg C)")]
+colnames(hadCRUT_data) <- c("year", "temp_anomaly")
+head(hadCRUT_data)
+```
+
+## 1.2.2
+
+A line in this dataframe represents the deviation from the mean temperature between 1961-1990, in Celsius.
+
+## 1.2.3
+
+This data represents the period from 1850 to 2023.
+
+## 1.2.4
+```{r}
+pre_industrial_avg <- mean(hadCRUT_data$temp_anomaly[hadCRUT_data$year <= 1900], na.rm = TRUE)
+hadCRUT_data <- hadCRUT_data %>%
+mutate(anomaly_over_pre_industrial = temp_anomaly - pre_industrial_avg, na.rm = TRUE)
+cat("The pre-industrial average is", mean(hadCRUT_data[hadCRUT_data$year >= 1961 & hadCRUT_data$year <= 1990, ]$temp_anomaly, na.rm = TRUE) - pre_industrial_avg, "C lower than the 1961 - 1990 average.")
+```
+## 1.2.5
+```{r}
+ggplot(hadCRUT_data, aes(x = year, y = anomaly_over_pre_industrial)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Global Surface Temperature Anomaly Over Time (w.r.t. Pre-Industrial Baseline)",
+       x = "Year",
+       y = "Temperature Anomaly (C)") +
+  theme_minimal()
+```
+## 1.2.6
+
+Since about 1920, it has both been increasing, as well as accelerating.
+
+### ---------- 1.3: How is global temperature related to CO2 levels? ----------
+
+## 1.3.1
+
+The easiest merge key to use would be the year, since it has a standardized progression.
+
+## 1.3.2
+
+To merge using years, we can average all the monthly data within a given year for the Scripps CO2 data.
+
+## 1.3.3
+```{r}
+filtered_scripps <- filtered_scripps %>%
+  group_by(year) %>%
+  summarize(co2 = mean(co2, na.rm = TRUE))
+scripps_hadCRUT <- inner_join(filtered_scripps, hadCRUT_data, by = "year")
+```
+
+It's best to use inner join since hadCRUT_data contains data for years that filtered_scripps doesn't account for.
+
+## 1.3.4
+```{r}
+ggplot(scripps_hadCRUT, aes(x = co2, y = anomaly_over_pre_industrial, color = year)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  geom_hline(yintercept = 1.5, linetype = "dashed", color = "red") +
+  scale_color_viridis_c(name = "Decades", breaks = seq(1850, 2020, by = 10)) +
+  labs(title = "CO2 vs Temperature Anomaly",
+       x = "CO2 Concentration (ppm)",
+       y = "Temperature Anomaly (w.r.t. 1850-1900 average, in C)",
+       color = "Decade") +
+  theme_minimal()
+```
+
+## ---------- 2: Global Surface Temperature VS Lower Troposphere Temperature ----------
+
+## 2.1
+```{r}
+UAH_data <- read_delim("C:/Users/xuz-t/OneDrive/Documents/INFO_201_Scripts/PS6/data/UAH-lower-troposphere-wide.csv")
+UAH_data <- UAH_data[, c("year", "month", "globe")]
+head(UAH_data)
+```
+
+## 2.2
+```{r}
+UAH_data <- UAH_data %>%
+  group_by(year) %>%
+  summarise(UAH_anomaly = mean(globe, na.rm = TRUE))
+```
+
+## 2.3
+```{r}
+hadCRUT_subset <- hadCRUT_data[, -2]
+hadCRUT_UAH <- inner_join(UAH_data, hadCRUT_subset, by = "year")
+```
+
+## 2.4
+
+The data is currently in wide form.
+
+## 2.5
+```{r}
+hadCRUT_UAH <- hadCRUT_UAH %>%
+  pivot_longer(cols = c("anomaly_over_pre_industrial", "UAH_anomaly"),
+               names_to = "type",
+               values_to = "anomaly") %>%
+  mutate(type = ifelse(type == "anomaly_over_pre_industrial", "surface", "lower_troposphere"))
+head(hadCRUT_UAH)
+```
+
+## 2.6
+```{r}
+ggplot(hadCRUT_UAH, aes(x = year, y = anomaly, color = type)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Temperature Anomaly Over Years",
+       x = "Year",
+       y = "Temperature Anomaly",
+       color = "Type") +
+  theme_minimal()
+```
+
+Surface temperatures (from the hadCRUT dataset) are growing a little faster.
