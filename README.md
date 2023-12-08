@@ -84,17 +84,6 @@ you can drop them now.
 4. Is this dataset in a wide or long form?
 5. Reshape it into long form. The variables should be something like “year”, “anomaly” and
 “type”, and the later should be type of anomaly (surface/lower troposphere)
-It might look something like this:
-3
-## # A tibble: 6 x 3
-## year type anomaly
-## <dbl> <chr> <dbl>
-## 1 1978 surface 0.362
-## 2 1978 lower troposphere -0.48
-## 3 1979 surface 0.447
-## 4 1979 lower troposphere -0.348
-## 5 1980 surface 0.553
-## 6 1980 lower troposphere -0.179
 6. Make a plot where you show how temperature anomaly changes over years. Mark both types
 with a different color, and add trend lines for each type. Which temperature–surface of lower
 troposhphere–is growing faster?
